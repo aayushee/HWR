@@ -6,7 +6,8 @@ import os
 import cPickle as pickle
 import xml.etree.ElementTree as ET
 from keras.preprocessing import sequence
-from keras.optimizers import SGD,RMSprop
+from keras.optimizers import SGD,Adam
+from keras.regularizers import l1,l2
 from keras.layers import Lambda, Dense, Activation, Flatten, Bidirectional, TimeDistributed
 from keras.layers.recurrent import GRU, LSTM
 from keras.models import *
@@ -200,14 +201,15 @@ print (x_train.shape, y_train.shape)
 size=x_train.shape[0]
 trainable=True
 inputs = Input(name='the_input', shape=x_train.shape[1:], dtype='float32')
-rnn_encoded = Bidirectional(GRU(64, return_sequences=True),
+rnn_encoded = Bidirectional(LSTM(32, return_sequences=True),
                                 name='bidirectional_1',
                                 merge_mode='concat',trainable=trainable)(inputs)
-birnn_encoded = Bidirectional(GRU(64, return_sequences=True),
+birnn_encoded = Bidirectional(LSTM(32, return_sequences=True),
                                 name='bidirectional_2',
                                 merge_mode='concat',trainable=trainable)(rnn_encoded)
+tri_encoded=Bidirectional(LSTM(32,return_sequences=True),name='bidirectional_3',merge_mode='concat',trainable=trainable)(birnn_encoded)
 #decoder=GRU(128,activation='softmax',recurrent_activation='hard_sigmoid', return_sequences=True)(rnn_encoded)
-output = TimeDistributed(Dense(66, activation='softmax'))(birnn_encoded)
+output = TimeDistributed(Dense(66,name='dense'))(tri_encoded)
 
 
 y_pred = Activation('softmax', name='softmax')(output)
@@ -218,16 +220,16 @@ label_length = Input(name='label_length', shape=[1], dtype='int64')
 
 
 #model = Model(inputs=inputs, outputs=y_hat)
-#Model(inputs=inputs, outputs=y_pred).summary()
+Model(inputs=inputs, outputs=y_pred).summary()
 
 
 loss_out = Lambda(ctc_lambda_func, output_shape=(1,), name='ctc')([y_pred, labels, input_length, label_length])
 model = Model(inputs=[inputs, labels, input_length, label_length], outputs=loss_out)
 print(inputs._keras_shape, labels._keras_shape,input_length._keras_shape,label_length._keras_shape)
 #model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-#sgd = SGD(lr=0.2, decay=1e-2, momentum=0.9, nesterov=True, clipnorm=5)
-
-model.compile(loss={'ctc': lambda y_true, y_pred: y_pred}, optimizer='Adadelta')
+#sgd = SGD(lr=0.1, decay=1e-3, momentum=0.9, nesterov=True, clipnorm=5)
+#ad=Adam(clipnorm=1.,clipvalue=0.5)
+model.compile(loss={'ctc': lambda y_true, y_pred: y_pred}, optimizer='adam')
 
 absolute_max_string_len=max_len
 blank_label=len(alphabet)+1
